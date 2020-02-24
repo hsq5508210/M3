@@ -15,9 +15,9 @@ FLAGS = flags.FLAGS
 # flags.DEFINE_string("data_PATH", default="/data2/hsq/Project/PACS/", help="The dataset's path.")
 # flags.DEFINE_string("split_txt_PATH", default="/data2/hsq/Project/multiModelMetric/pacs_filename", help="file with how to split row data.")
 
-flags.DEFINE_string("data_PATH", default="/data2/hsq/mini-Imagenet", help="The dataset's path.")
-flags.DEFINE_string("split_txt_PATH", default="/data2/hsq/mini-imagenet-split", help="file with how to split row data.")
-flags.DEFINE_string("meta_data_path", default="/data2/hsq/Project/mini-imagenet-tasks-data", help="npy file path.")
+flags.DEFINE_string("data_PATH", default="/home/y192202040/Projects/mini-Imagenet", help="The dataset's path.")
+flags.DEFINE_string("split_txt_PATH", default="/home/y192202040/Projects/mini-imagenet-split", help="file with how to split row data.")
+flags.DEFINE_string("meta_data_path", default="/home/y192202040/Projects/mini-imagenet-tasks-data", help="npy file path.")
 # flags.DEFINE_string("data_source", default="PACS", help="The dataset's name.")
 
 flags.DEFINE_string("data_source", default="mini-imagenet", help="The dataset's name.")
@@ -32,7 +32,7 @@ flags.DEFINE_integer("k_neighbor", default=1, help="the number of k-nearest neig
 flags.DEFINE_integer("input_dim", default=3, help="input image channels.")
 flags.DEFINE_string("backbone", default="Conv64F", help="Model name.")
 flags.DEFINE_integer("filter_num", default=64, help="Model name.")
-flags.DEFINE_string("distance_style", default="euc_v1", help="how to compute the distance.")
+flags.DEFINE_string("distance_style", default="euc_v2", help="how to compute the distance.")
 flags.DEFINE_bool("max_pool", default=True, help="use maxpool or not.")
 flags.DEFINE_string("norm", default="None", help="choose norm style.")
 flags.DEFINE_float("margin", default=1.0, help="set the margin of the loss_eps.")
@@ -52,27 +52,27 @@ flags.DEFINE_string("optimizer", default='adam', help="how to optimize parameter
 
 
 ##config train
-flags.DEFINE_integer("episode_tr", default=30, help="the total number of training episodes.")
+flags.DEFINE_integer("episode_tr", default=2000, help="the total number of training episodes.")
 flags.DEFINE_integer("episode_val", default=50, help="the total number of evaluate episodes.")
-flags.DEFINE_integer("episode_ts", default=20, help="the total number of testing episodes.")
+flags.DEFINE_integer("episode_ts", default=200, help="the total number of testing episodes.")
 flags.DEFINE_bool("load_ckpt", default=False, help="load check point or not.")
 flags.DEFINE_bool("save_ckpt", default=True, help="save check point or not.")
 
 flags.DEFINE_bool("debug_mode", default=False, help="debug or not.")
 
 
-flags.DEFINE_integer("test_batch_size", default=100, help="the test batch size.")
+flags.DEFINE_integer("test_batch_size", default=1, help="the test batch size.")
 flags.DEFINE_integer("support_num", default=3, help="Num of support per class per model.")
 flags.DEFINE_integer("query_num", default=7, help="Num of query per class per model.")
 flags.DEFINE_integer("way_num", default=5, help="the number of classify ways.")
-flags.DEFINE_integer("iteration", default=10000, help="iterations.")
-flags.DEFINE_float("lr", default=0.00005, help="learning rate.")
+flags.DEFINE_integer("iteration", default=30, help="iterations.")
+flags.DEFINE_float("lr", default=0.001, help="learning rate.")
 flags.DEFINE_bool("train", default=True, help="Train or not.")
 flags.DEFINE_bool("lr_decay", default=True, help="lr_decay or not.")
 flags.DEFINE_integer("decay_iteration", default=5, help="lr_decay or not.")
 flags.DEFINE_bool("visualize", default=False, help="visualize or not.")
 flags.DEFINE_float("decay_rate", default=0.05, help="learning rate decay rate.")
-flags.DEFINE_string("model_path", default="/data2/hsq/Project/multiModelMetric/log/model_checkpoint/mini-imagenet_5way_1shot_5000task_lossep_margin0.4_w0.3_euc/5_1_5000_losseps_margin0.4_w0.3_euc", help="model's path.")
+flags.DEFINE_string("model_path", default="/home/y192202040/Projects/M3_tf2/log/model_checkpoint/mini-imagenet_5way_1shot_5000task_lossep_margin0.4_w0.3_euc/5_1_5000_losseps_margin0.4_w0.3_euc", help="model's path.")
 flags.DEFINE_string("loss_function", default="log", help="choose loss function.")
 flags.DEFINE_string("gpu", default="1", help="choose gpu.")
 
@@ -89,28 +89,31 @@ def visualize(sess, graph=False):
     writer.close()
 
 def test_iteration(model, bestacc, test_tasks, i):
-    saver = tf.train.Saver()
-    if FLAGS.lr_decay and i % 5 == 0 and i != 0: model.decay(i)
-    test_acc, tl = 0.0, 0.0
-    print("testing...")
+    if FLAGS.lr_decay and i % FLAGS.decay_iteration == 0 and i != 0: model.decay(i)
+    test_acc, test_loss = 0.0, 0.0
+    print("================================testing=============================")
     task_support_x = np.array([task['support_set'][0] for task in test_tasks]).astype(np.float)
     task_support_y = np.array([task['support_set'][1] for task in test_tasks]).astype(np.float)
+    task_support_m = np.array([task['support_set'][2] for task in test_tasks]).astype(np.float)
+
     task_query_x = np.array([task['query_set'][0] for task in test_tasks]).astype(np.float)
     task_query_y = np.array([task['query_set'][1] for task in test_tasks]).astype(np.float)
+    task_query_m = np.array([task['query_set'][2] for task in test_tasks]).astype(np.float)
+
     b = FLAGS.test_batch_size
-    for k in tqdm(range(int(FLAGS.episode_ts / FLAGS.test_batch_size))):
+    for k in (range(int(FLAGS.episode_ts / FLAGS.test_batch_size))):
         support_x = task_support_x[k * b: (k + 1) * b]
         support_y = task_support_y[k * b: (k + 1) * b]
+        support_m = task_support_m[k * b: (k + 1) * b]
+
         query_x = task_query_x[k * b: (k + 1) * b]
         query_y = task_query_y[k * b: (k + 1) * b]
-            # test_loss, acc = sess.run(model.get_loss((model.support_x, model.support_y, model.query_x, model.query_y), model.weights,), feed_dic)
-        loss, acc = tf.map_fn(model([task_support_x, task_support_y], [query_x, query_y], 'test'))
-
-        # acc = model.testop((support_x, support_y, query_x, query_y)).eval()
+        query_m = task_query_m[k * b: (k + 1) * b]
+        loss, acc = model([support_x, support_y, support_m], [query_x, query_y, query_m], 'test')
         test_acc += sum(acc)
-        # tl += test_loss
+        test_loss += sum(loss)
     ts_accurcy = test_acc / FLAGS.episode_ts
-    ts_loss = loss / FLAGS.episode_ts
+    ts_loss = test_loss / FLAGS.episode_ts
     print("\nepoch %d  test acc is %f, loss is %f." % ((i + 1), ts_accurcy, ts_loss))
     loss_line['test_accu'].append(ts_accurcy)
     loss_line['test_loss'].append(ts_loss)
@@ -120,7 +123,7 @@ def test_iteration(model, bestacc, test_tasks, i):
         if FLAGS.save_ckpt:
             if not os.path.exists(FLAGS.model_path):
                 os.makedirs(FLAGS.model_path)
-                model.backbone.save(FLAGS.model_path, include_optimizer=False)
+                model.backbone.save_weights(FLAGS.model_path)
     return bestacc
 
 
@@ -140,20 +143,18 @@ def train(model, data_generator, test_tasks):
         all_task=[]
         for t in tasks_path:
             all_task.extend(np.load(os.path.join(FLAGS.meta_data_path, t), allow_pickle=True))
-    bestacc = 0
+    bestacc = 0.0
     for i in range(FLAGS.iteration):
         l = a = 0.0
-        for j in range(FLAGS.episode_tr):
+        for j in tqdm(range(FLAGS.episode_tr)):
             task = all_task[j]
             support_set, query_set = task['support_set'], task['query_set']
             loss, acc = model(support_set, query_set, 'train')
             l += loss
             a += acc
-        print("train acc is %f, train loss is %f"%(a/FLAGS.episode_tr, l/FLAGS.episode_tr))
-        bestacc = test_iteration(model, bestacc, test_tasks, i)
-
-
-
+            if (j+1) % 100 == 0:
+                bestacc = test_iteration(model, bestacc, test_tasks, i)
+        print("train acc is %f, train loss is %f" % (a / FLAGS.episode_tr, l / FLAGS.episode_tr))
 
 
 def main():

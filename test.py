@@ -63,14 +63,10 @@ def euc_v2(x, y):
     distance = tf.sqrt(tf.reduce_sum(tf.square(x_tile - y_tile), axis=2))
     return distance
 # print(s_test1)
-print(s_test1.shape)
-# euc = tf.sqrt(tf.reduce_sum(tf.square(q_test1 - s_test1), axis=2))
-eucv2 = euc_v2(q_test, s_test)
-eucv1 = euc_v1(q_test, s_test)
-print(eucv2)
-print(eucv2.shape)
-print(eucv1)
-print(eucv2-eucv1)
+
+a = [1, 2, 3]
+ad = tf.linalg.diag(a)
+print(ad)
 
 
 

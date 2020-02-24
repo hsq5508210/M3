@@ -36,7 +36,6 @@ def readtxt(filename, image_PATH):
     txt = open(filename, 'r')
     for line in txt:
         item = {'path':"", 'label':0}
-        # print(line)
         item['path'], item['label'] = line.split()
         item['path'] = os.path.join(image_PATH, item['path'])
         nameList.append(item)
@@ -47,7 +46,6 @@ def readcsv(filename, image_PATH):
     csv = open(filename, 'r')
     for line in csv:
         item = {'path': "", 'label': 0}
-        # print(line)
         line = line.strip('\n')
         item['path'], item['label'] = line.split(',')
         item['path'] = os.path.join(image_PATH, item['path'])
@@ -127,7 +125,6 @@ def sample_task(query_num_per_class_per_model=1, class_num=5,
 
     task_data = []
     classes = random.sample(range(raw_class_num), class_num)
-    # print(classes)
     s = {'data':[], 'label':[], 'modal':[]}
     q = {'data':[], 'label':[], 'modal':[]}
     for m_label, m in enumerate(model):
@@ -137,7 +134,6 @@ def sample_task(query_num_per_class_per_model=1, class_num=5,
             support_x = [data_model[m][c][id] for id in idxs]
             support_y = [i for _ in range(support_num_per_class_per_model)]
             support_modal = [m_label for _ in range(support_num_per_class_per_model)]
-            # print("support:", support_x, support_y, support_modal)
 
             # while True:
             #     idx = np.random.randint(len(data_model[m][c]))
@@ -287,18 +283,18 @@ def support_label_modal_proto(support_x, support_y, support_m):
     with tf.name_scope("support_label_modal_prototype"):
         sifter = tf.map_fn(lambda sm: tf.matmul(tf.reshape(sm, (-1, 1)), tf.ones((1, 5)))*support_y, elems=tf.transpose(support_m),
                            dtype=tf.float32, parallel_iterations=FLAGS.model)
-        modal_proto_type = tf.map_fn(lambda x: tf.matmul(tf.diag(1/tf.reduce_sum(x, axis=0)), tf.matmul(tf.transpose(x), support_x)), elems=sifter,
+        modal_proto_type = tf.map_fn(lambda x: tf.matmul(tf.linalg.diag(1/tf.reduce_sum(x, axis=0)), tf.matmul(tf.transpose(x), support_x)), elems=sifter,
                                      dtype=tf.float32, parallel_iterations=FLAGS.model)
-        modal = tf.map_fn(lambda m: tf.matmul(tf.ones((5, 1)), tf.reshape(m, (1, -1))), elems=tf.diag(tf.ones((FLAGS.model))), dtype=tf.float32, parallel_iterations=FLAGS.model)
-        label = tf.tile(tf.diag(tf.ones_like(support_y[0])), (FLAGS.model, 1))
+        modal = tf.map_fn(lambda m: tf.matmul(tf.ones((5, 1)), tf.reshape(m, (1, -1))), elems=tf.linalg.diag(tf.ones((FLAGS.model))), dtype=tf.float32, parallel_iterations=FLAGS.model)
+        label = tf.tile(tf.linalg.diag(tf.ones_like(support_y[0])), (FLAGS.model, 1))
     return tf.reshape(modal_proto_type, (FLAGS.way_num * FLAGS.model, -1)), \
            tf.reshape(modal, (FLAGS.way_num * FLAGS.model, -1)), \
            tf.reshape(label, (FLAGS.way_num * FLAGS.model, -1))
 def get_prototype(support_x, s_label):
     with tf.name_scope("compute_prototype"):
-        mean_matrix = tf.diag(1/tf.reduce_sum(s_label, axis=0))
+        mean_matrix = tf.linalg.diag(1/tf.reduce_sum(s_label, axis=0))
         prototypes = tf.matmul(mean_matrix, tf.matmul(tf.transpose(s_label), support_x))
-    return prototypes, tf.diag(tf.ones(FLAGS.way_num))
+    return prototypes, tf.linalg.diag(tf.ones(FLAGS.way_num))
 
 def support_weight(support_x, s_label):
     with tf.name_scope("support_weight"):
@@ -349,7 +345,7 @@ def loss_eps_prototype(support_x, query_x, s_modal, q_modal, s_label, q_label, m
         margin_exp_GBL = tf.reduce_sum(tf.exp(-group_by_label + tf.ones_like(group_by_label) * margin), axis=1)
         margin_exp_GBL = margin_exp_GBL - tf.exp(margin * tf.ones_like(margin_exp_GBL))
         exp_SLDM = tf.exp(-same_label_diff_model_dist)
-        loss_eps = -tf.log(exp_SLDM / (margin_exp_GBL + exp_SLDM))
+        loss_eps = -tf.math.log(exp_SLDM / (margin_exp_GBL + exp_SLDM))
     return loss_eps
 
 
@@ -383,7 +379,7 @@ def loss_eps(support_x, query_x, s_modal, q_modal, s_label, q_label, margin):
         margin_exp_GBL = tf.reduce_sum(tf.exp(-group_by_label + tf.ones_like(group_by_label) * margin), axis=1)
         margin_exp_GBL = margin_exp_GBL - tf.exp(margin * tf.ones_like(margin_exp_GBL))
         exp_SLDM = tf.exp(-same_label_diff_model_dist)
-        loss_eps = -tf.log(exp_SLDM / (margin_exp_GBL + exp_SLDM))
+        loss_eps = -tf.math.log(exp_SLDM / (margin_exp_GBL + exp_SLDM))
     return loss_eps
 
 
@@ -413,7 +409,7 @@ def inter_dist(dist, weights, query_y, support_y, t):
 
 def get_acc(pred, actual):
     with tf.name_scope("compute_accu"):
-        p = tf.cast(tf.one_hot(tf.arg_max(pred, 1), FLAGS.way_num), dtype=tf.bool)
+        p = tf.cast(tf.one_hot(tf.compat.v1.arg_max(pred, 1), FLAGS.way_num), dtype=tf.bool)
         a = tf.cast(actual, dtype=tf.bool)
         acc = tf.reduce_sum(tf.cast(tf.logical_and(p, a),
                                  dtype=tf.float32))/\
@@ -426,9 +422,9 @@ def get_dist_category(x, y, y_onehot_label):
         # if FLAGS.distance_style == 'euc':
         #     dist = tf.map_fn(fn=lambda x_: distance(x_, y), elems=x, dtype=tf.float32, parallel_iterations=FLAGS.model*FLAGS.way_num*FLAGS.query_num)
         # elif FLAGS.distance_style == 'cosine':
-        dist = distance(x, y, 'class_prototype')
+        dist = distance(x, y)
         res = tf.exp(-tf.matmul(dist, y_onehot_label))
-        sum = tf.diag(1/tf.reduce_sum(res, axis=1))
+        sum = tf.linalg.diag(1/tf.reduce_sum(res, axis=1))
         softmax = tf.matmul(sum, res)
     return softmax
 
@@ -465,8 +461,8 @@ def mse(pred, label):
     return tf.reduce_mean(tf.square(pred-label), axis=1)
 def log_liklyhood(pred, label):
     with tf.name_scope('log_category_loss'):
-        # res = tf.reduce_sum(-tf.log(tf.reduce_sum(pred * label, axis=1)))
-        res = -tf.log(tf.reduce_sum(pred * label, axis=1))
+        # res = tf.reduce_sum(-tf.math.log(tf.reduce_sum(pred * label, axis=1)))
+        res = -tf.math.log(tf.reduce_sum(pred * label, axis=1))
 
     return res
 
@@ -503,6 +499,6 @@ def compute_loss(qxy, support_x, support_y, t=1.0):
         dist = distance(query_x, support_x)
         intrad = intra_dist(dist, weights, query_y, support_y)
         interd = inter_dist(dist, weights, query_y, support_y, t)
-        log_likely_hood = -tf.log(tf.exp(-intrad)/(tf.exp(-intrad) + tf.reduce_sum(tf.exp(-interd))))
+        log_likely_hood = -tf.math.log(tf.exp(-intrad)/(tf.exp(-intrad) + tf.reduce_sum(tf.exp(-interd))))
     return log_likely_hood
     # return interd
